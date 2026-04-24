@@ -2,9 +2,10 @@ from flask import Flask, request, jsonify, Response
 import requests
 import ast
 import operator
-
+ 
 app = Flask(__name__)
-
+ 
+ 
 OPERATORS = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
@@ -14,10 +15,12 @@ OPERATORS = {
     ast.UAdd: operator.pos,
 }
 
+# Evaluate expression
 def eval(expr):
+    """Safely evaluate an arithmetic expression containing integers, +, -, *, /, parentheses."""
     tree = ast.parse(expr, mode='eval')
     return _eval_node(tree.body)
-
+ 
 def _eval_node(node):
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return node.value
@@ -36,19 +39,19 @@ def _eval_node(node):
         return op(operand)
     else:
         raise ValueError(f"Unsupported expression node: {type(node).__name__}")
-
-
+ 
+ 
 # Airport temperature
 def get_airport_temp(iata_code):
-    """Get current temperature at an airport using wttr.in."""
-    url = f"https://wttr.in/{iata_code}?format=%t"
+    """Get current temperature at an airport using wttr.in JSON API."""
+    url = f"https://wttr.in/{iata_code}?format=j1"
     resp = requests.get(url, headers={"User-Agent": "curl/7.68.0"}, timeout=10)
     resp.raise_for_status()
-    # Response is like "+12°C" or "-3°C"
-    temp_str = resp.text.strip().replace("°C", "").replace("+", "")
-    return float(temp_str)
-
-
+    data = resp.json()
+    temp_c = data['current_condition'][0]['temp_C']
+    return float(temp_c)
+ 
+ 
 # Stock price
 def get_stock_price(symbol):
     """Get current stock price using yfinance."""
@@ -58,19 +61,19 @@ def get_stock_price(symbol):
     if data.empty:
         raise ValueError(f"No data found for symbol: {symbol}")
     return float(data['Close'].iloc[-1])
-
-
+ 
+ 
 # Main route
 @app.route('/')
 def home():
     airport = request.args.get('queryAirportTemp')
     stock = request.args.get('queryStockPrice')
     eval_expr = request.args.get('queryEval')
-
+ 
     accept = request.headers.get('Accept', '')
-
+ 
     result = None
-
+ 
     try:
         if airport:
             result = get_airport_temp(airport)
@@ -82,14 +85,16 @@ def home():
             result = None
     except Exception as e:
         result = None
-
+ 
     # Determine response format based on Accept header
-    if 'application/xml' in accept or 'text/xml' in accept:
+    wants_xml = ('application/xml' in accept or 'text/xml' in accept) and 'text/html' not in accept
+ 
+    if wants_xml:
         xml_value = result if result is not None else ""
         content_type = 'application/xml'
-        if 'text/xml' in accept:
+        if 'text/xml' in accept and 'application/xml' not in accept:
             content_type = 'text/xml'
-        xml_response = f'<?xml version="1.0" encoding="UTF-8"?>\n<result>{xml_value}</result>'
+        xml_response = f'<?xml version="1.0" encoding="UTF-8"?>\n<r>{xml_value}</r>'
         return Response(xml_response, content_type=content_type)
     else:
         return jsonify(result)
