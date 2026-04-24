@@ -1,3 +1,5 @@
+# Author: Dominik Horut (582955)
+
 from flask import Flask, request, jsonify, Response
 import requests
 import ast
